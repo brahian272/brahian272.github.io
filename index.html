@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Huellas del Valle | Citas Veterinarias</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="logo">🐾</div>
+      <div>
+        <h1>Huellas del Valle</h1>
+        <p>Clínica Veterinaria S.A.S.</p>
+      </div>
+    </div>
+    <nav>
+      <button class="nav-btn active" data-view="agendar">Agendar cita</button>
+      <button class="nav-btn" data-view="agenda">Agenda del día</button>
+    </nav>
+  </header>
+
+  <main class="container">
+    <section id="agendar" class="view active">
+      <div class="page-title">
+        <div>
+          <span class="eyebrow">NUEVA SOLICITUD</span>
+          <h2>Agendar una cita</h2>
+          <p>Consulta disponibilidad y envía la solicitud automáticamente.</p>
+        </div>
+      </div>
+
+      <div class="card form-card">
+        <form id="appointmentForm">
+          <div class="grid">
+            <div class="field">
+              <label for="propietario">Propietario *</label>
+              <input id="propietario" name="propietario" required placeholder="Nombre completo">
+            </div>
+            <div class="field">
+              <label for="correo">Correo *</label>
+              <input id="correo" name="correo" type="email" required placeholder="correo@ejemplo.com">
+            </div>
+            <div class="field">
+              <label for="mascota">Mascota *</label>
+              <input id="mascota" name="mascota" required placeholder="Nombre de la mascota">
+            </div>
+            <div class="field">
+              <label for="especie">Especie *</label>
+              <select id="especie" name="especie" required>
+                <option value="">Seleccione...</option>
+                <option>Perro</option>
+                <option>Gato</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="servicio">Servicio *</label>
+              <select id="servicio" name="servicio" required>
+                <option value="">Seleccione...</option>
+                <option>Consulta general</option>
+                <option>Vacunación</option>
+                <option>Baño</option>
+                <option>Ecografía</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="fecha">Fecha *</label>
+              <input id="fecha" name="fecha" type="date" required>
+            </div>
+            <div class="field">
+              <label for="hora">Hora *</label>
+              <select id="hora" name="hora" required>
+                <option value="">Seleccione...</option>
+                <option value="08:00">08:00</option>
+                <option value="09:00">09:00</option>
+                <option value="10:00">10:00</option>
+                <option value="11:00">11:00</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="notice">
+            <strong>Automatización:</strong>
+            al enviar, la solicitud se enviará al escenario 1 de Make mediante un webhook.
+          </div>
+
+          <button class="primary-btn" type="submit">🐾 Solicitar cita</button>
+        </form>
+      </div>
+
+      <div id="result" class="result hidden"></div>
+    </section>
+
+    <section id="agenda" class="view">
+      <div class="page-title page-title-row">
+        <div>
+          <span class="eyebrow">CONSULTA</span>
+          <h2>Agenda del día</h2>
+          <p>Consulta las citas registradas y su estado.</p>
+        </div>
+        <div class="date-control">
+          <label for="agendaDate">Fecha</label>
+          <input id="agendaDate" type="date">
+        </div>
+      </div>
+
+      <div class="card table-card">
+        <div class="table-header">
+          <div>
+            <strong id="agendaTitle">Citas</strong>
+            <span id="appointmentCount">0 registros</span>
+          </div>
+          <button class="secondary-btn" id="refreshAgenda">Actualizar</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Hora</th>
+                <th>Mascota</th>
+                <th>Especie</th>
+                <th>Propietario</th>
+                <th>Servicio</th>
+                <th>Estado</th>
+              </tr>
+            </thead>
+            <tbody id="agendaBody"></tbody>
+          </table>
+        </div>
+        <div id="emptyAgenda" class="empty hidden">
+          No hay citas registradas para esta fecha.
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    Clínica Veterinaria Huellas del Valle S.A.S. · Sistema de agendamiento
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
