@@ -1,16 +1,16 @@
-/*
-  CONFIGURACIÓN:
-  1. Crea el webhook en Make.
-  2. Copia aquí la URL del webhook.
-  3. Guarda el archivo y abre index.html.
+// ======================================================
+// HUELLAS DEL VALLE - APP.JS
+// Conexión: Página Web -> Make Webhook
+// ======================================================
 
-  Mientras WEBHOOK_URL esté vacío, la aplicación funciona en modo DEMO
-  para probar la interfaz y los cinco casos sin llamar a Make.
-*/
+// URL DEL WEBHOOK DE MAKE
+const WEBHOOK_URL = "https://hook.us2.make.com/yl76dg8e14ihpszcjmjosb3nrlyrjgri";
 
-const WEBHOOK_URL = "https://hook.us2.make.com/m4gujibygf0lkieroon8b40j3uxfhiy8";
+// ======================================================
+// AGENDA DE DEMOSTRACIÓN
+// ======================================================
 
-const demoAgenda = 
+const DEMO_AGENDA = [
   {
     franja: "2026-10-14 08:00",
     fecha: "2026-10-14",
@@ -69,183 +69,492 @@ const demoAgenda =
   }
 ];
 
-let appointments = JSON.parse(localStorage.getItem("huellas_citas") || "[]");
-let agenda = JSON.parse(localStorage.getItem("huellas_agenda") || "null") || demoAgenda;
+// ======================================================
+// VARIABLES
+// ======================================================
 
-function saveData() {
-  localStorage.setItem("huellas_citas", JSON.stringify(appointments));
-  localStorage.setItem("huellas_agenda", JSON.stringify(agenda));
-}
+let agenda = JSON.parse(
+  localStorage.getItem("huellas_agenda")
+) || DEMO_AGENDA;
 
-document.querySelectorAll(".nav-btn").forEach(btn => {
-  btn.addEventListener("click", () => {
-    document.querySelectorAll(".nav-btn").forEach(b => b.classList.remove("active"));
-    document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
-    btn.classList.add("active");
-    document.getElementById(btn.dataset.view).classList.add("active");
-    if (btn.dataset.view === "agenda") renderAgenda();
-  });
-});
+let citas = JSON.parse(
+  localStorage.getItem("huellas_citas")
+) || [];
+
+// ======================================================
+// ELEMENTOS HTML
+// ======================================================
 
 const form = document.getElementById("appointmentForm");
-form.addEventListener("submit", async (event) => {
-  event.preventDefault();
+const mensaje = document.getElementById("mensaje");
+const agendaBody = document.getElementById("agendaBody");
 
-  const data = Object.fromEntries(new FormData(form).entries());
-  const payload = {
-    ...data,
-    franja: `${data.fecha} ${data.hora}`,
-    cuando_se_pidio: new Date().toISOString(),
-  };
+// ======================================================
+// MOSTRAR MENSAJES
+// ======================================================
 
-  if (!WEBHOOK_URL) {
-    const response = processDemo(payload);
-    showResult(response);
+function mostrarMensaje(texto, tipo = "info") {
+  if (!mensaje) {
+    alert(texto);
     return;
   }
 
-  try {
-    const response = await fetch(WEBHOOK_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
-    });
+  mensaje.textContent = texto;
+  mensaje.className = "mensaje " + tipo;
+}
 
-    const result = await response.json();
-    showResult(result);
-  } catch (error) {
-    showResult({
-      resultado: "ERROR",
-      mensaje: "No fue posible comunicarse con el servicio de agendamiento."
-    });
-  }
-});
+// ======================================================
+// GUARDAR DATOS
+// ======================================================
 
-function processDemo(data) {
-  const slot = agenda.find(a => a.fecha === data.fecha && a.hora === data.hora);
-
-  if (!slot) {
-    return {
-      resultado: "RESPALDO",
-      mensaje: "La franja no existe en la agenda. La solicitud quedó registrada para revisión."
-    };
-  }
-
-  const duplicate = appointments.some(a =>
-    a.mascota.toLowerCase() === data.mascota.toLowerCase() &&
-    a.fecha === data.fecha &&
-    ["CONFIRMADA", "CONFIRMADA CON ALERTA"].includes(a.resultado)
+function guardarDatos() {
+  localStorage.setItem(
+    "huellas_agenda",
+    JSON.stringify(agenda)
   );
 
-  if (duplicate) {
-    return {
-      resultado: "RECHAZADA",
-      mensaje: "La mascota ya tiene una cita registrada para ese día."
-    };
+  localStorage.setItem(
+    "huellas_citas",
+    JSON.stringify(citas)
+  );
+}
+
+// ======================================================
+// BUSCAR FRANJA
+// ======================================================
+
+function buscarFranja(fecha, hora) {
+  return agenda.find(function (item) {
+    return item.fecha === fecha && item.hora === hora;
+  });
+}
+
+// ======================================================
+// VALIDAR CITA DUPLICADA
+// ======================================================
+
+function citaDuplicada(mascota, fecha) {
+  return citas.some(function (cita) {
+    return (
+      cita.mascota.toLowerCase() === mascota.toLowerCase() &&
+      cita.fecha === fecha &&
+      (
+        cita.estado === "CONFIRMADA" ||
+        cita.estado === "CONFIRMADA CON ALERTA"
+      )
+    );
+  });
+}
+
+// ======================================================
+// MOSTRAR AGENDA
+// ======================================================
+
+function mostrarAgenda() {
+
+  if (!agendaBody) {
+    return;
   }
+
+  agendaBody.innerHTML = "";
+
+  agenda.forEach(function (item) {
+
+    const fila = document.createElement("tr");
+
+    const libres = item.cupo - item.ocupados;
+
+    fila.innerHTML = `
+      <td>${item.fecha}</td>
+      <td>${item.hora}</td>
+      <td>${item.cupo}</td>
+      <td>${item.ocupados}</td>
+      <td>${libres}</td>
+    `;
+
+    agendaBody.appendChild(fila);
+  });
+}
+
+// ======================================================
+// ENVIAR DATOS A MAKE
+// ======================================================
+
+async function enviarWebhook(datos) {
+
+  try {
+
+    const respuesta = await fetch(WEBHOOK_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(datos)
+    });
+
+    if (!respuesta.ok) {
+      throw new Error(
+        "El Webhook respondió con estado " + respuesta.status
+      );
+    }
+
+    let resultado;
+
+    try {
+      resultado = await respuesta.json();
+    } catch (error) {
+      resultado = {
+        resultado: "RECIBIDO",
+        mensaje: "Make recibió los datos correctamente."
+      };
+    }
+
+    return resultado;
+
+  } catch (error) {
+
+    console.error("Error enviando a Make:", error);
+
+    throw error;
+  }
+}
+
+// ======================================================
+// PROCESAR CITA
+// ======================================================
+
+async function procesarCita(datos) {
+
+  // ----------------------------------------------------
+  // 1. BUSCAR FRANJA
+  // ----------------------------------------------------
+
+  const slot = buscarFranja(
+    datos.fecha,
+    datos.hora
+  );
+
+  // ----------------------------------------------------
+  // 2. SI NO EXISTE LA FRANJA
+  // ----------------------------------------------------
+
+  if (!slot) {
+
+    const incidencia = {
+      id_incidencia: "INC-" + Date.now(),
+      fecha_hora: new Date().toISOString(),
+      mascota: datos.mascota,
+      propietario: datos.propietario,
+      fecha: datos.fecha,
+      hora: datos.hora,
+      tipo: "FRANJA_NO_EXISTE",
+      resultado: "RUTA DE RESPALDO",
+      observacion: "La franja solicitada no existe en la agenda."
+    };
+
+    console.warn("Ruta de respaldo:", incidencia);
+
+    mostrarMensaje(
+      "La franja solicitada no está disponible en la agenda. La solicitud fue enviada a revisión.",
+      "advertencia"
+    );
+
+    try {
+      await enviarWebhook({
+        ...datos,
+        resultado: "RUTA DE RESPALDO",
+        observacion: "La franja no existe en la agenda."
+      });
+    } catch (error) {
+      console.warn("No fue posible enviar la incidencia a Make.");
+    }
+
+    return;
+  }
+
+  // ----------------------------------------------------
+  // 3. VALIDAR DUPLICADO
+  // ----------------------------------------------------
+
+  if (citaDuplicada(datos.mascota, datos.fecha)) {
+
+    mostrarMensaje(
+      "La mascota ya tiene una cita confirmada para ese día.",
+      "error"
+    );
+
+    return;
+  }
+
+  // ----------------------------------------------------
+  // 4. CALCULAR CUPOS
+  // ----------------------------------------------------
 
   const libresAntes = slot.cupo - slot.ocupados;
 
+  // ----------------------------------------------------
+  // 5. VALIDAR SI ESTÁ LLENO
+  // ----------------------------------------------------
+
   if (libresAntes <= 0) {
-    return {
-      resultado: "RECHAZADA",
-      mensaje: "La franja seleccionada está llena. No se registró ninguna cita."
-    };
+
+    mostrarMensaje(
+      "Lo sentimos. Esta franja ya está llena. No se registró ninguna cita.",
+      "error"
+    );
+
+    return;
   }
 
-  slot.ocupados += 1;
-  const libres = slot.cupo - slot.ocupados;
-  const resultado = libres <= 1 ? "CONFIRMADA CON ALERTA" : "CONFIRMADA";
+  // ----------------------------------------------------
+  // 6. PREPARAR ESTADO
+  // ----------------------------------------------------
 
-  appointments.push({
-    id_cita: "C" + Date.now(),
-    ...data,
-    resultado,
-    estado: "AGENDADA",
-    libres
-  });
+  const nuevosOcupados = slot.ocupados + 1;
+  const libresDespues = slot.cupo - nuevosOcupados;
 
-  saveData();
+  let resultado;
 
-  return {
-    resultado,
-    mensaje: resultado === "CONFIRMADA CON ALERTA"
-      ? "La cita fue registrada y la franja quedó con 1 o 0 cupos libres. Administración debe ser notificada."
-      : "La cita fue registrada correctamente.",
-    libres,
-    cupo: slot.cupo,
-    ocupados: slot.ocupados
+  if (libresDespues <= 1) {
+    resultado = "CONFIRMADA CON ALERTA";
+  } else {
+    resultado = "CONFIRMADA";
+  }
+
+  // ----------------------------------------------------
+  // 7. DATOS DE LA CITA
+  // ----------------------------------------------------
+
+  const cita = {
+    id_cita: "CIT-" + Date.now(),
+    propietario: datos.propietario,
+    correo: datos.correo,
+    mascota: datos.mascota,
+    especie: datos.especie,
+    servicio: datos.servicio,
+    fecha: datos.fecha,
+    hora: datos.hora,
+    franja: datos.franja,
+    cuando_se_pidio: datos.cuando_se_pidio,
+    resultado: resultado,
+    estado: resultado,
+    observacion:
+      resultado === "CONFIRMADA CON ALERTA"
+        ? "Queda un solo cupo disponible."
+        : "Cita registrada correctamente."
   };
+
+  // ----------------------------------------------------
+  // 8. ACTUALIZAR AGENDA
+  // ----------------------------------------------------
+
+  slot.ocupados = nuevosOcupados;
+
+  // ----------------------------------------------------
+  // 9. GUARDAR CITA
+  // ----------------------------------------------------
+
+  citas.push(cita);
+
+  guardarDatos();
+
+  mostrarAgenda();
+
+  // ----------------------------------------------------
+  // 10. ENVIAR A MAKE
+  // ----------------------------------------------------
+
+  try {
+
+    const respuestaMake = await enviarWebhook({
+      ...datos,
+      resultado: resultado,
+      libres: libresDespues,
+      id_cita: cita.id_cita
+    });
+
+    console.log(
+      "Respuesta de Make:",
+      respuestaMake
+    );
+
+  } catch (error) {
+
+    console.error(
+      "La cita fue guardada localmente, pero Make no respondió."
+    );
+
+    mostrarMensaje(
+      "La cita fue registrada, pero hubo un problema al comunicar con Make.",
+      "advertencia"
+    );
+
+    return;
+  }
+
+  // ----------------------------------------------------
+  // 11. MENSAJE FINAL
+  // ----------------------------------------------------
+
+  if (resultado === "CONFIRMADA CON ALERTA") {
+
+    mostrarMensaje(
+      "Cita confirmada. Atención: queda un solo cupo disponible en esta franja.",
+      "advertencia"
+    );
+
+  } else {
+
+    mostrarMensaje(
+      "Cita confirmada correctamente. Cupos disponibles: " +
+      libresDespues,
+      "exito"
+    );
+  }
+
+  // ----------------------------------------------------
+  // 12. LIMPIAR FORMULARIO
+  // ----------------------------------------------------
+
+  if (form) {
+    form.reset();
+  }
 }
 
-function showResult(response) {
-  const box = document.getElementById("result");
-  box.className = "result";
+// ======================================================
+// EVENTO DEL FORMULARIO
+// ======================================================
 
-  const result = String(response.resultado || "").toUpperCase();
+if (form) {
 
-  if (result.includes("CONFIRMADA CON ALERTA")) box.classList.add("warning");
-  else if (result === "CONFIRMADA") box.classList.add("success");
-  else if (result === "RECHAZADA") box.classList.add("error");
-  else box.classList.add("warning");
+  form.addEventListener("submit", async function (event) {
 
-  box.innerHTML = `
-    <h3>${result || "RESPUESTA DEL SISTEMA"}</h3>
-    <p>${response.mensaje || "El sistema procesó la solicitud."}</p>
-    ${response.libres !== undefined ? `<p><strong>Cupos libres:</strong> ${response.libres}</p>` : ""}
-  `;
+    event.preventDefault();
 
-  box.classList.remove("hidden");
-  form.reset();
-}
+    const propietario =
+      document.getElementById("propietario")?.value.trim();
 
-const agendaDate = document.getElementById("agendaDate");
-agendaDate.value = "2026-10-14";
+    const correo =
+      document.getElementById("correo")?.value.trim();
 
-agendaDate.addEventListener("change", renderAgenda);
-document.getElementById("refreshAgenda").addEventListener("click", renderAgenda);
+    const mascota =
+      document.getElementById("mascota")?.value.trim();
 
-function renderAgenda() {
-  const date = agendaDate.value;
-  const body = document.getElementById("agendaBody");
-  const empty = document.getElementById("emptyAgenda");
+    const especie =
+      document.getElementById("especie")?.value;
 
-  const rows = appointments
-    .filter(a => a.fecha === date)
-    .sort((a, b) => a.hora.localeCompare(b.hora));
+    const servicio =
+      document.getElementById("servicio")?.value;
 
-  body.innerHTML = "";
-  document.getElementById("appointmentCount").textContent =
-    `${rows.length} registro${rows.length === 1 ? "" : "s"}`;
+    const fecha =
+      document.getElementById("fecha")?.value;
 
-  rows.forEach(a => {
-    const statusClass =
-      a.resultado === "CONFIRMADA" ? "status-confirmada" :
-      a.resultado === "CONFIRMADA CON ALERTA" ? "status-alerta" :
-      "status-rechazada";
+    const hora =
+      document.getElementById("hora")?.value;
 
-    body.innerHTML += `
-      <tr>
-        <td>${a.hora}</td>
-        <td>${escapeHtml(a.mascota)}</td>
-        <td>${escapeHtml(a.especie)}</td>
-        <td>${escapeHtml(a.propietario)}</td>
-        <td>${escapeHtml(a.servicio)}</td>
-        <td><span class="status ${statusClass}">${escapeHtml(a.resultado)}</span></td>
-      </tr>
-    `;
+    // --------------------------------------------------
+    // VALIDACIÓN
+    // --------------------------------------------------
+
+    if (
+      !propietario ||
+      !correo ||
+      !mascota ||
+      !especie ||
+      !servicio ||
+      !fecha ||
+      !hora
+    ) {
+
+      mostrarMensaje(
+        "Por favor completa todos los campos.",
+        "error"
+      );
+
+      return;
+    }
+
+    // --------------------------------------------------
+    // DATOS PARA MAKE
+    // --------------------------------------------------
+
+    const datos = {
+
+      propietario: propietario,
+
+      correo: correo,
+
+      mascota: mascota,
+
+      especie: especie,
+
+      servicio: servicio,
+
+      fecha: fecha,
+
+      hora: hora,
+
+      franja: fecha + " " + hora,
+
+      cuando_se_pidio:
+        new Date().toISOString()
+    };
+
+    console.log(
+      "Datos que se enviarán a Make:",
+      datos
+    );
+
+    // --------------------------------------------------
+    // DESHABILITAR BOTÓN
+    // --------------------------------------------------
+
+    const boton =
+      form.querySelector("button[type='submit']");
+
+    if (boton) {
+      boton.disabled = true;
+      boton.textContent = "Procesando...";
+    }
+
+    try {
+
+      await procesarCita(datos);
+
+    } catch (error) {
+
+      console.error(
+        "Error procesando la cita:",
+        error
+      );
+
+      mostrarMensaje(
+        "Ocurrió un error al procesar la cita.",
+        "error"
+      );
+
+    } finally {
+
+      if (boton) {
+        boton.disabled = false;
+        boton.textContent = "Agendar cita";
+      }
+    }
+
   });
-
-  empty.classList.toggle("hidden", rows.length !== 0);
 }
 
-function escapeHtml(value) {
-  return String(value)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-}
+// ======================================================
+// INICIALIZAR PÁGINA
+// ======================================================
 
-renderAgenda();
+mostrarAgenda();
+
+console.log(
+  "Huellas del Valle - app.js cargado correctamente."
+);
+
+console.log(
+  "Webhook configurado:",
+  WEBHOOK_URL
+);
